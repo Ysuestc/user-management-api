@@ -1,6 +1,7 @@
 node_modules/
 .beads/
 .runtime/
+CLAUDE.md
 .env
 data/
 coverage/
