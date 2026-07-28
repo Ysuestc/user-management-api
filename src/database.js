@@ -1,6 +1,8 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 const migrations = [
   `CREATE TABLE IF NOT EXISTS users (

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import express from "express";
 import request from "supertest";
 import { z } from "zod";
@@ -12,12 +12,12 @@ describe("API foundation", () => {
   let app;
   let database;
 
-  before(() => {
+  beforeAll(() => {
     database = initializeDatabase(":memory:");
     app = createApp({ database });
   });
 
-  after(() => database.close());
+  afterAll(() => database.close());
 
   it("reports service and database health", async () => {
     const response = await request(app).get("/health");

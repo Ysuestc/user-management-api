@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "lint": "eslint .",
     "format": "prettier --check ."
   },
@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "eslint": "^9.32.0",
+    "jest": "^30.4.2",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4"
   }

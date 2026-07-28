@@ -1,57 +1,139 @@
 # User Management API
 
-An Express and SQLite foundation for the user-management service.
+An Express REST API backed by SQLite. It supports account registration, bcrypt
+password hashing, JWT login, current-user profile management, and role-protected
+administrator access.
 
 ## Requirements
 
 - Node.js 22.5 or newer
+- npm
 
-## Setup
+## Installation
 
 ```bash
+git clone https://github.com/Ysuestc/user-management-api.git
+cd user-management-api
+npm ci
 cp .env.example .env
-npm install
+```
+
+Before running the service, replace the example `JWT_SECRET` in `.env` with a
+random value of at least 32 characters. The example is intentionally not a real
+credential.
+
+Available settings:
+
+- `NODE_ENV`: `development`, `test`, or `production`
+- `PORT`: HTTP port; defaults to `3000`
+- `DATABASE_PATH`: SQLite path; defaults to `./data/users.sqlite`
+- `JWT_SECRET`: secret used to sign and verify JWTs; required
+- `JWT_EXPIRES_IN`: token lifetime accepted by `jsonwebtoken`; defaults to `1h`
+
+## Starting the API
+
+```bash
 npm start
 ```
 
-The default server listens on `http://localhost:3000`. Runtime settings are
-loaded from the environment:
+For local development with automatic restart:
 
-- `PORT`: HTTP port (default `3000`)
-- `DATABASE_PATH`: SQLite file path (default `./data/users.sqlite`)
-- `NODE_ENV`: `development`, `test`, or `production`
-
-No secrets are committed. Add any future credentials only to the ignored
-`.env` file or to the deployment environment.
-
-## Health check
-
-`GET /health` verifies that both the HTTP service and SQLite connection are
-available:
-
-```json
-{ "status": "ok" }
+```bash
+npm run dev
 ```
 
-Errors use a consistent envelope:
+The examples below assume the API is available at `http://localhost:3000`.
+
+## Testing and quality checks
+
+The Jest integration suite uses Supertest and an in-memory SQLite database, so
+it does not modify the development database:
+
+```bash
+npm test
+npm run lint
+npm run format
+```
+
+## API examples
+
+Check service and database health:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Register an account:
+
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com",
+    "password": "correct horse battery staple",
+    "displayName": "Example User"
+  }'
+```
+
+Log in and copy the returned `token`:
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "user@example.com",
+    "password": "correct horse battery staple"
+  }'
+```
+
+Use that JWT to read the current profile:
+
+```bash
+curl http://localhost:3000/users/me \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+Update the current user's email or display name:
+
+```bash
+curl -X PATCH http://localhost:3000/users/me \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"display_name":"Updated Name"}'
+```
+
+List users with a token belonging to an administrator:
+
+```bash
+curl http://localhost:3000/admin/users \
+  -H 'Authorization: Bearer ADMIN_TOKEN'
+```
+
+New registrations receive the `user` role. This service deliberately exposes
+no public endpoint for granting administrator privileges; provision that role
+through a trusted operational process.
+
+Successful responses never include password hashes. Errors use a consistent
+envelope:
 
 ```json
 {
   "error": {
-    "code": "NOT_FOUND",
-    "message": "Route GET /missing was not found"
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": []
   }
 }
 ```
 
-Request handlers can reuse `validate` from `src/validate.js` with Zod schemas
-for `params`, `query`, and `body`. Parsed values are available under
-`request.validated`.
+Common statuses are `400` for invalid parameters, `401` for invalid
+credentials or JWTs, `403` for insufficient privileges, and `409` for an email
+that is already registered.
 
-## Quality checks
+## Security notes
 
-```bash
-npm run lint
-npm run format
-npm test
-```
+- Never commit `.env`; it is ignored by Git.
+- Use a unique, high-entropy `JWT_SECRET` in each deployed environment.
+- Passwords are stored only as bcrypt hashes.
+- Put the API behind HTTPS in production so credentials and bearer tokens are
+  encrypted in transit.

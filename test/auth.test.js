@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "@jest/globals";
 import bcrypt from "bcrypt";
 import request from "supertest";
 import { createApp } from "../src/app.js";
@@ -11,12 +11,12 @@ describe("authentication", () => {
   let app;
   let database;
 
-  before(() => {
+  beforeAll(() => {
     database = initializeDatabase(":memory:");
     app = createApp({ database, jwtSecret });
   });
 
-  after(() => database.close());
+  afterAll(() => database.close());
 
   it("registers users with a bcrypt hash and no password disclosure", async () => {
     const response = await request(app).post("/auth/register").send({
