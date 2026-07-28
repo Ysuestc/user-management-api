@@ -8,6 +8,8 @@ const environmentSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_PATH: z.string().min(1).default("./data/users.sqlite"),
+  JWT_SECRET: z.string().min(32),
+  JWT_EXPIRES_IN: z.string().min(1).default("1h"),
 });
 
 export function loadConfig(environment = process.env) {
@@ -24,5 +26,7 @@ export function loadConfig(environment = process.env) {
       result.data.DATABASE_PATH === ":memory:"
         ? ":memory:"
         : path.resolve(result.data.DATABASE_PATH),
+    jwtSecret: result.data.JWT_SECRET,
+    jwtExpiresIn: result.data.JWT_EXPIRES_IN,
   };
 }

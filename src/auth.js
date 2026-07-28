@@ -1,0 +1,165 @@
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { Router } from "express";
+import { z } from "zod";
+import { AppError } from "./errors.js";
+import { validate } from "./validate.js";
+
+const credentialsError = () =>
+  new AppError(401, "INVALID_CREDENTIALS", "Invalid email or password");
+
+const registerSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+  displayName: z.string().trim().min(1).max(100),
+});
+
+const loginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
+  password: z.string().min(1).max(128),
+});
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name,
+    role: user.role,
+    createdAt: user.created_at,
+  };
+}
+
+function signToken(user, secret, expiresIn) {
+  if (!secret) {
+    throw new Error("JWT secret is not configured");
+  }
+
+  return jwt.sign({ role: user.role }, secret, {
+    subject: String(user.id),
+    expiresIn,
+    algorithm: "HS256",
+  });
+}
+
+export function authenticate({ database, jwtSecret }) {
+  return function authenticationMiddleware(request, response, next) {
+    void response;
+    const authorization = request.get("authorization");
+    const match = authorization?.match(/^Bearer ([^\s]+)$/);
+
+    if (!match || !jwtSecret) {
+      return next(new AppError(401, "UNAUTHORIZED", "Authentication required"));
+    }
+
+    try {
+      const claims = jwt.verify(match[1], jwtSecret, {
+        algorithms: ["HS256"],
+      });
+      const user = database
+        .prepare(
+          `SELECT id, email, display_name, role, created_at
+           FROM users WHERE id = ?`,
+        )
+        .get(claims.sub);
+
+      if (!user) {
+        return next(
+          new AppError(401, "UNAUTHORIZED", "Authentication required"),
+        );
+      }
+
+      request.user = publicUser(user);
+      return next();
+    } catch (error) {
+      if (error instanceof AppError) return next(error);
+      return next(new AppError(401, "UNAUTHORIZED", "Authentication required"));
+    }
+  };
+}
+
+export function createAuthRouter({ database, jwtSecret, jwtExpiresIn }) {
+  const router = Router();
+
+  router.post(
+    "/register",
+    validate({ body: registerSchema }),
+    async (request, response, next) => {
+      const { email, password, displayName } = request.validated.body;
+
+      try {
+        const passwordHash = await bcrypt.hash(password, 12);
+        const result = database
+          .prepare(
+            `INSERT INTO users (email, password_hash, display_name)
+             VALUES (?, ?, ?)`,
+          )
+          .run(email, passwordHash, displayName);
+        const user = database
+          .prepare(
+            `SELECT id, email, display_name, role, created_at
+             FROM users WHERE id = ?`,
+          )
+          .get(result.lastInsertRowid);
+
+        return response.status(201).json({ user: publicUser(user) });
+      } catch (error) {
+        if (
+          error.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+          error.message?.includes("UNIQUE constraint failed")
+        ) {
+          return next(
+            new AppError(
+              409,
+              "EMAIL_ALREADY_EXISTS",
+              "An account with this email already exists",
+            ),
+          );
+        }
+        return next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/login",
+    validate({ body: loginSchema }),
+    async (request, response, next) => {
+      const { email, password } = request.validated.body;
+
+      try {
+        const user = database
+          .prepare(
+            `SELECT id, email, password_hash, display_name, role, created_at
+             FROM users WHERE email = ?`,
+          )
+          .get(email);
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+          return next(credentialsError());
+        }
+
+        return response.json({
+          token: signToken(user, jwtSecret, jwtExpiresIn),
+          user: publicUser(user),
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  router.get(
+    "/session",
+    authenticate({ database, jwtSecret }),
+    (request, response) => response.json({ user: request.user }),
+  );
+
+  return router;
+}

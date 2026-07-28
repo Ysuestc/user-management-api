@@ -4,7 +4,11 @@ import { initializeDatabase } from "./database.js";
 
 const config = loadConfig();
 const database = initializeDatabase(config.databasePath);
-const app = createApp({ database });
+const app = createApp({
+  database,
+  jwtSecret: config.jwtSecret,
+  jwtExpiresIn: config.jwtExpiresIn,
+});
 
 const server = app.listen(config.port, () => {
   console.log(`User management API listening on port ${config.port}`);
