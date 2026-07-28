@@ -1,7 +1,8 @@
 import express from "express";
 import { errorHandler, notFoundHandler } from "./errors.js";
+import { createUsersRouter } from "./users.js";
 
-export function createApp({ database }) {
+export function createApp({ database, authenticate }) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -18,6 +19,7 @@ export function createApp({ database }) {
     }
   });
 
+  app.use(createUsersRouter({ database, authenticate }));
   app.use(notFoundHandler);
   app.use(errorHandler);
 
