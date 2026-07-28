@@ -1,8 +1,17 @@
 import express from "express";
-import { createAuthRouter } from "./auth.js";
+import {
+  authenticate as createAuthentication,
+  createAuthRouter,
+} from "./auth.js";
 import { errorHandler, notFoundHandler } from "./errors.js";
+import { createUsersRouter } from "./users.js";
 
-export function createApp({ database, jwtSecret, jwtExpiresIn = "1h" }) {
+export function createApp({
+  database,
+  jwtSecret,
+  jwtExpiresIn = "1h",
+  authenticate = createAuthentication({ database, jwtSecret }),
+}) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -20,6 +29,7 @@ export function createApp({ database, jwtSecret, jwtExpiresIn = "1h" }) {
     }
   });
 
+  app.use(createUsersRouter({ database, authenticate }));
   app.use(notFoundHandler);
   app.use(errorHandler);
 
