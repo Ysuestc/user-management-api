@@ -1,0 +1,9 @@
+node_modules/
+.beads/
+.runtime/
+.env
+data/
+coverage/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
