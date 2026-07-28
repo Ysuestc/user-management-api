@@ -45,7 +45,8 @@ Errors use a consistent envelope:
 ```
 
 Request handlers can reuse `validate` from `src/validate.js` with Zod schemas
-for `params`, `query`, and `body`.
+for `params`, `query`, and `body`. Parsed values are available under
+`request.validated`.
 
 ## Quality checks
 

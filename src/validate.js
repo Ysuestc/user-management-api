@@ -3,9 +3,12 @@ export function validate(schemas) {
     void response;
 
     try {
+      request.validated = {};
       for (const location of ["params", "query", "body"]) {
         if (schemas[location]) {
-          request[location] = schemas[location].parse(request[location]);
+          request.validated[location] = schemas[location].parse(
+            request[location],
+          );
         }
       }
       next();

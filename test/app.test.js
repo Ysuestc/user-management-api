@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
+import express from "express";
 import request from "supertest";
+import { z } from "zod";
 import { createApp } from "../src/app.js";
 import { initializeDatabase } from "../src/database.js";
+import { errorHandler } from "../src/errors.js";
+import { validate } from "../src/validate.js";
 
 describe("API foundation", () => {
   let app;
@@ -38,5 +42,26 @@ describe("API foundation", () => {
 
     assert.equal(response.status, 400);
     assert.equal(response.body.error.code, "BAD_REQUEST");
+  });
+
+  it("validates and normalizes request input for handlers", async () => {
+    const validationApp = express();
+    validationApp.get(
+      "/items",
+      validate({
+        query: z.object({ limit: z.coerce.number().int().positive() }),
+      }),
+      (incomingRequest, response) => {
+        response.json(incomingRequest.validated.query);
+      },
+    );
+    validationApp.use(errorHandler);
+
+    const validResponse = await request(validationApp).get("/items?limit=3");
+    assert.deepEqual(validResponse.body, { limit: 3 });
+
+    const invalidResponse = await request(validationApp).get("/items?limit=no");
+    assert.equal(invalidResponse.status, 400);
+    assert.equal(invalidResponse.body.error.code, "VALIDATION_ERROR");
   });
 });
