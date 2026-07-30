@@ -27,7 +27,7 @@ describe("Refinery controlled failure drill", () => {
       .post("/notes")
       .send({ content: "Refinery drill" });
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 201);
     assert.deepEqual(response.body, { id: 1, content: "Refinery drill" });
   });
 
