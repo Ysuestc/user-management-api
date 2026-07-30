@@ -4,6 +4,7 @@ import {
   createAuthRouter,
 } from "./auth.js";
 import { errorHandler, notFoundHandler } from "./errors.js";
+import { createNotesRouter } from "./notes.js";
 import { createUsersRouter } from "./users.js";
 
 export function createApp({
@@ -30,6 +31,7 @@ export function createApp({
   });
 
   app.use(createUsersRouter({ database, authenticate }));
+  app.use(createNotesRouter());
   app.use(notFoundHandler);
   app.use(errorHandler);
 
