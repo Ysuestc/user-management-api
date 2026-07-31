@@ -1,6 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import { requireAuthenticated, requireRole } from "./authorization.js";
+import { recordAuditEventBestEffort } from "./audit.js";
 import { AppError } from "./errors.js";
 import { validate } from "./validate.js";
 
@@ -32,9 +33,13 @@ function findUser(database, id) {
 export function createUsersRouter({
   database,
   authenticate = defaultAuthenticate,
+  audit,
+  onAuditError,
 }) {
   const router = express.Router();
   const authenticated = [authenticate, requireAuthenticated];
+  const recordAudit = (event) =>
+    recordAuditEventBestEffort(audit, event, onAuditError);
 
   router.get("/users/me", authenticated, (request, response, next) => {
     try {
@@ -80,6 +85,13 @@ export function createUsersRouter({
           throw new AppError(401, "UNAUTHORIZED", "Authentication is invalid");
         }
 
+        recordAudit({
+          actor_user_id: Number(request.user.id),
+          action: "user.profile_updated",
+          target_type: "user",
+          target_id: String(request.user.id),
+          metadata: { fields: Object.keys(fields).sort() },
+        });
         response
           .status(200)
           .json({ user: findUser(database, request.user.id) });

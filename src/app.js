@@ -3,6 +3,7 @@ import {
   authenticate as createAuthentication,
   createAuthRouter,
 } from "./auth.js";
+import { createAuditService } from "./audit.js";
 import { errorHandler, notFoundHandler } from "./errors.js";
 import { createNotesRouter } from "./notes.js";
 import { createUsersRouter } from "./users.js";
@@ -15,6 +16,8 @@ export function createApp({
   passwordResetTokens,
   onPasswordResetToken,
   exposePasswordResetToken = false,
+  audit = createAuditService({ database }),
+  onAuditError,
 }) {
   const app = express();
 
@@ -29,6 +32,8 @@ export function createApp({
       passwordResetTokens,
       onPasswordResetToken,
       exposePasswordResetToken,
+      audit,
+      onAuditError,
     }),
   );
 
@@ -43,7 +48,7 @@ export function createApp({
     }
   });
 
-  app.use(createUsersRouter({ database, authenticate }));
+  app.use(createUsersRouter({ database, authenticate, audit, onAuditError }));
   app.use(createNotesRouter());
   app.use(notFoundHandler);
   app.use(errorHandler);

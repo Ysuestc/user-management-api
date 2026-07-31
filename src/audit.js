@@ -172,3 +172,25 @@ export function createAuditService({ database }) {
     },
   };
 }
+
+// Audit persistence is deliberately fail-open: a logging outage must not turn a
+// completed account operation into an HTTP failure. Callers can report the
+// failure through onError without including request bodies, credentials, or
+// tokens.
+export function recordAuditEventBestEffort(audit, event, onError = () => {}) {
+  try {
+    return audit.record(event);
+  } catch (error) {
+    try {
+      onError(error, {
+        action: event.action,
+        actor_user_id: event.actor_user_id ?? null,
+        target_type: event.target_type,
+        target_id: event.target_id,
+      });
+    } catch {
+      // Error reporting is also fail-open.
+    }
+    return null;
+  }
+}
