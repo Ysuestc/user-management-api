@@ -64,6 +64,50 @@ describe("notes", () => {
     assert.deepEqual(listResponse.body, [createResponse.body]);
   });
 
+  it("filters notes by an exact normalized tag", async () => {
+    const workNote = (
+      await request(app)
+        .post("/notes")
+        .send({ content: "Work note", tags: ["work", "urgent"] })
+    ).body;
+    await request(app)
+      .post("/notes")
+      .send({ content: "Personal note", tags: ["personal"] });
+    await request(app)
+      .post("/notes")
+      .send({ content: "Case-sensitive note", tags: ["Work"] });
+
+    const response = await request(app).get("/notes").query({ tag: " work " });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, [workNote]);
+  });
+
+  it("returns an empty list for an unknown tag", async () => {
+    await request(app)
+      .post("/notes")
+      .send({ content: "Work note", tags: ["work"] });
+
+    const response = await request(app).get("/notes").query({ tag: "unknown" });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, []);
+  });
+
+  it.each(["", "   "])("rejects a blank tag query: %j", async (tag) => {
+    const response = await request(app).get("/notes").query({ tag });
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, "VALIDATION_ERROR");
+  });
+
+  it("rejects repeated tag query parameters", async () => {
+    const response = await request(app).get("/notes?tag=work&tag=urgent");
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, "VALIDATION_ERROR");
+  });
+
   it.each([
     { content: "Note", tags: "work" },
     { content: "Note", tags: [42] },
