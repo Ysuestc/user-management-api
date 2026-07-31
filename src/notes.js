@@ -16,6 +16,10 @@ const createNoteSchema = z.object({
   tags: tagsSchema,
 });
 
+const listNotesQuerySchema = z.object({
+  tag: z.string().trim().min(1).max(MAX_TAG_LENGTH).optional(),
+});
+
 export function createNotesRouter() {
   const router = express.Router();
   const notes = [];
@@ -37,10 +41,19 @@ export function createNotesRouter() {
     },
   );
 
-  router.get("/notes", (request, response) => {
-    void request;
-    response.status(200).json(notes);
-  });
+  router.get(
+    "/notes",
+    validate({ query: listNotesQuerySchema }),
+    (request, response) => {
+      const { tag } = request.validated.query;
+      const matchingNotes =
+        tag === undefined
+          ? notes
+          : notes.filter((note) => note.tags.includes(tag));
+
+      response.status(200).json(matchingNotes);
+    },
+  );
 
   return router;
 }
