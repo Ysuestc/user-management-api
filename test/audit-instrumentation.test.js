@@ -176,4 +176,27 @@ describe("audit instrumentation", () => {
       false,
     );
   });
+
+  it("stays fail-open if the audit error reporter also fails", async () => {
+    const failingApp = createApp({
+      database,
+      jwtSecret,
+      audit: {
+        record() {
+          throw new Error("audit storage unavailable");
+        },
+      },
+      onAuditError() {
+        throw new Error("reporter unavailable");
+      },
+    });
+
+    const response = await request(failingApp).post("/auth/register").send({
+      email: "still-available@example.com",
+      password: "must remain available",
+      displayName: "Still Available",
+    });
+
+    assert.equal(response.status, 201);
+  });
 });

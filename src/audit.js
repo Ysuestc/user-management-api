@@ -181,12 +181,16 @@ export function recordAuditEventBestEffort(audit, event, onError = () => {}) {
   try {
     return audit.record(event);
   } catch (error) {
-    onError(error, {
-      action: event.action,
-      actor_user_id: event.actor_user_id ?? null,
-      target_type: event.target_type,
-      target_id: event.target_id,
-    });
+    try {
+      onError(error, {
+        action: event.action,
+        actor_user_id: event.actor_user_id ?? null,
+        target_type: event.target_type,
+        target_id: event.target_id,
+      });
+    } catch {
+      // Error reporting is also fail-open.
+    }
     return null;
   }
 }
