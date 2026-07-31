@@ -9,17 +9,6 @@ describe("audit service", () => {
 
   beforeEach(() => {
     database = initializeDatabase(":memory:");
-    database.exec(`
-      CREATE TABLE audit_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        actor_user_id INTEGER,
-        action TEXT NOT NULL,
-        target_type TEXT NOT NULL,
-        target_id TEXT NOT NULL,
-        metadata TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
     audit = createAuditService({ database });
   });
 
@@ -142,6 +131,24 @@ describe("audit service", () => {
           target_id: "1",
         }),
       /action must be a non-empty string/,
+    );
+  });
+
+  it("initializes the audit migration idempotently", () => {
+    const columns = [
+      ...database.prepare("PRAGMA table_info(audit_events)").all(),
+    ];
+    assert.deepEqual(
+      columns.map((column) => column.name),
+      [
+        "id",
+        "actor_user_id",
+        "action",
+        "target_type",
+        "target_id",
+        "metadata",
+        "created_at",
+      ],
     );
   });
 });

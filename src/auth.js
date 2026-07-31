@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Router } from "express";
 import { z } from "zod";
+import { recordAuditEventBestEffort } from "./audit.js";
 import { AppError } from "./errors.js";
 import { createPasswordResetTokenService } from "./password-reset-tokens.js";
 import { validate } from "./validate.js";
@@ -106,8 +107,12 @@ export function createAuthRouter({
   passwordResetTokens = createPasswordResetTokenService({ database }),
   onPasswordResetToken,
   exposePasswordResetToken = false,
+  audit,
+  onAuditError,
 }) {
   const router = Router();
+  const recordAudit = (event) =>
+    recordAuditEventBestEffort(audit, event, onAuditError);
 
   router.post(
     "/register",
@@ -129,6 +134,13 @@ export function createAuthRouter({
              FROM users WHERE id = ?`,
           )
           .get(result.lastInsertRowid);
+        recordAudit({
+          actor_user_id: Number(user.id),
+          action: "user.registered",
+          target_type: "user",
+          target_id: String(user.id),
+          metadata: {},
+        });
 
         return response.status(201).json({ user: publicUser(user) });
       } catch (error) {
@@ -163,9 +175,23 @@ export function createAuthRouter({
           )
           .get(email);
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+          recordAudit({
+            actor_user_id: null,
+            action: "auth.login_failed",
+            target_type: "user",
+            target_id: email,
+            metadata: { reason: "invalid_credentials" },
+          });
           return next(credentialsError());
         }
 
+        recordAudit({
+          actor_user_id: Number(user.id),
+          action: "auth.login_succeeded",
+          target_type: "user",
+          target_id: String(user.id),
+          metadata: {},
+        });
         return response.json({
           token: signToken(user, jwtSecret, jwtExpiresIn),
           user: publicUser(user),
@@ -198,6 +224,13 @@ export function createAuthRouter({
             });
           }
         }
+        recordAudit({
+          actor_user_id: null,
+          action: "password_reset.requested",
+          target_type: "user",
+          target_id: user ? String(user.id) : email,
+          metadata: { account_found: Boolean(user) },
+        });
 
         const body = {
           message:
@@ -219,6 +252,7 @@ export function createAuthRouter({
 
       try {
         const passwordHash = await bcrypt.hash(password, 12);
+        let userId;
         database.exec("BEGIN IMMEDIATE");
         try {
           const consumed = passwordResetTokens.consume(token);
@@ -229,6 +263,7 @@ export function createAuthRouter({
               "Password reset token is invalid or expired",
             );
           }
+          userId = consumed.userId;
 
           const result = database
             .prepare(
@@ -249,6 +284,13 @@ export function createAuthRouter({
           database.exec("ROLLBACK");
           throw error;
         }
+        recordAudit({
+          actor_user_id: Number(userId),
+          action: "password_reset.succeeded",
+          target_type: "user",
+          target_id: String(userId),
+          metadata: {},
+        });
 
         return response.json({ message: "Password has been reset" });
       } catch (error) {

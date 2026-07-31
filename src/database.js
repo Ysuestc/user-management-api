@@ -28,6 +28,21 @@ const migrations = [
    ON password_reset_tokens(user_id)`,
   `CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx
    ON password_reset_tokens(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_user_id INTEGER,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS audit_events_actor_user_id_idx
+   ON audit_events(actor_user_id)`,
+  `CREATE INDEX IF NOT EXISTS audit_events_action_idx
+   ON audit_events(action)`,
+  `CREATE INDEX IF NOT EXISTS audit_events_created_at_idx
+   ON audit_events(created_at)`,
 ];
 
 export function initializeDatabase(databasePath) {
