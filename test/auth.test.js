@@ -88,4 +88,70 @@ describe("authentication", () => {
     assert.equal(unauthenticated.status, 401);
     assert.equal(unauthenticated.body.error.code, "UNAUTHORIZED");
   });
+
+  it("resets a password without revealing whether the email exists", async () => {
+    const existing = await request(app)
+      .post("/auth/password-reset/request")
+      .send({ email: "user@example.com" });
+    const missing = await request(app)
+      .post("/auth/password-reset/request")
+      .send({ email: "missing@example.com" });
+
+    assert.equal(existing.status, 202);
+    assert.deepEqual(existing.body, missing.body);
+    assert.equal("token" in existing.body, false);
+  });
+
+  it("accepts a valid reset token once and changes login credentials", async () => {
+    const testApp = createApp({
+      database,
+      jwtSecret,
+      exposePasswordResetToken: true,
+    });
+    const requested = await request(testApp)
+      .post("/auth/password-reset/request")
+      .send({ email: "user@example.com" });
+
+    const confirmed = await request(testApp)
+      .post("/auth/password-reset/confirm")
+      .send({
+        token: requested.body.token,
+        password: "a newly secure password",
+      });
+    assert.equal(confirmed.status, 200);
+
+    const oldLogin = await request(app).post("/auth/login").send({
+      email: "user@example.com",
+      password: "correct horse battery staple",
+    });
+    const newLogin = await request(app).post("/auth/login").send({
+      email: "user@example.com",
+      password: "a newly secure password",
+    });
+    assert.equal(oldLogin.status, 401);
+    assert.equal(newLogin.status, 200);
+
+    const reused = await request(testApp)
+      .post("/auth/password-reset/confirm")
+      .send({
+        token: requested.body.token,
+        password: "another secure password",
+      });
+    assert.equal(reused.status, 400);
+    assert.equal(reused.body.error.code, "INVALID_RESET_TOKEN");
+  });
+
+  it("rejects invalid reset tokens and passwords outside policy", async () => {
+    const invalidToken = await request(app)
+      .post("/auth/password-reset/confirm")
+      .send({ token: "invalid", password: "valid new password" });
+    assert.equal(invalidToken.status, 400);
+    assert.equal(invalidToken.body.error.code, "INVALID_RESET_TOKEN");
+
+    const weakPassword = await request(app)
+      .post("/auth/password-reset/confirm")
+      .send({ token: "invalid", password: "short" });
+    assert.equal(weakPassword.status, 400);
+    assert.equal(weakPassword.body.error.code, "VALIDATION_ERROR");
+  });
 });

@@ -12,12 +12,25 @@ export function createApp({
   jwtSecret,
   jwtExpiresIn = "1h",
   authenticate = createAuthentication({ database, jwtSecret }),
+  passwordResetTokens,
+  onPasswordResetToken,
+  exposePasswordResetToken = false,
 }) {
   const app = express();
 
   app.disable("x-powered-by");
   app.use(express.json({ limit: "100kb" }));
-  app.use("/auth", createAuthRouter({ database, jwtSecret, jwtExpiresIn }));
+  app.use(
+    "/auth",
+    createAuthRouter({
+      database,
+      jwtSecret,
+      jwtExpiresIn,
+      passwordResetTokens,
+      onPasswordResetToken,
+      exposePasswordResetToken,
+    }),
+  );
 
   app.get("/health", (request, response, next) => {
     void request;
