@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "./errors.js";
+import { createPasswordResetTokenService } from "./password-reset-tokens.js";
 import { validate } from "./validate.js";
 
 const credentialsError = () =>
@@ -25,6 +26,19 @@ const loginSchema = z.object({
     .email()
     .transform((value) => value.toLowerCase()),
   password: z.string().min(1).max(128),
+});
+
+const passwordResetRequestSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
+});
+
+const passwordResetConfirmSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
 });
 
 function publicUser(user) {
@@ -85,7 +99,14 @@ export function authenticate({ database, jwtSecret }) {
   };
 }
 
-export function createAuthRouter({ database, jwtSecret, jwtExpiresIn }) {
+export function createAuthRouter({
+  database,
+  jwtSecret,
+  jwtExpiresIn,
+  passwordResetTokens = createPasswordResetTokenService({ database }),
+  onPasswordResetToken,
+  exposePasswordResetToken = false,
+}) {
   const router = Router();
 
   router.post(
@@ -149,6 +170,87 @@ export function createAuthRouter({ database, jwtSecret, jwtExpiresIn }) {
           token: signToken(user, jwtSecret, jwtExpiresIn),
           user: publicUser(user),
         });
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/password-reset/request",
+    validate({ body: passwordResetRequestSchema }),
+    async (request, response, next) => {
+      const { email } = request.validated.body;
+
+      try {
+        const user = database
+          .prepare("SELECT id, email FROM users WHERE email = ?")
+          .get(email);
+        let issued;
+
+        if (user) {
+          issued = passwordResetTokens.create(user.id);
+          if (onPasswordResetToken) {
+            await onPasswordResetToken({
+              email: user.email,
+              token: issued.token,
+              expiresAt: issued.expiresAt,
+            });
+          }
+        }
+
+        const body = {
+          message:
+            "If an account exists for that email, a password reset link has been sent",
+        };
+        if (exposePasswordResetToken && issued) body.token = issued.token;
+        return response.status(202).json(body);
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/password-reset/confirm",
+    validate({ body: passwordResetConfirmSchema }),
+    async (request, response, next) => {
+      const { token, password } = request.validated.body;
+
+      try {
+        const passwordHash = await bcrypt.hash(password, 12);
+        database.exec("BEGIN IMMEDIATE");
+        try {
+          const consumed = passwordResetTokens.consume(token);
+          if (!consumed) {
+            throw new AppError(
+              400,
+              "INVALID_RESET_TOKEN",
+              "Password reset token is invalid or expired",
+            );
+          }
+
+          const result = database
+            .prepare(
+              `UPDATE users
+               SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?`,
+            )
+            .run(passwordHash, consumed.userId);
+          if (result.changes !== 1) {
+            throw new AppError(
+              400,
+              "INVALID_RESET_TOKEN",
+              "Password reset token is invalid or expired",
+            );
+          }
+          database.exec("COMMIT");
+        } catch (error) {
+          database.exec("ROLLBACK");
+          throw error;
+        }
+
+        return response.json({ message: "Password has been reset" });
       } catch (error) {
         return next(error);
       }
