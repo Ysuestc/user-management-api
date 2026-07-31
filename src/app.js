@@ -3,6 +3,7 @@ import {
   authenticate as createAuthentication,
   createAuthRouter,
 } from "./auth.js";
+import { createAdminAuditRouter } from "./admin-audit.js";
 import { createAuditService } from "./audit.js";
 import { errorHandler, notFoundHandler } from "./errors.js";
 import { createNotesRouter } from "./notes.js";
@@ -49,6 +50,7 @@ export function createApp({
   });
 
   app.use(createUsersRouter({ database, authenticate, audit, onAuditError }));
+  app.use(createAdminAuditRouter({ authenticate, audit }));
   app.use(createNotesRouter());
   app.use(notFoundHandler);
   app.use(errorHandler);
