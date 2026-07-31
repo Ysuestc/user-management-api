@@ -28,7 +28,11 @@ describe("Refinery controlled failure drill", () => {
       .send({ content: "Refinery drill" });
 
     assert.equal(response.status, 201);
-    assert.deepEqual(response.body, { id: 1, content: "Refinery drill" });
+    assert.deepEqual(response.body, {
+      id: 1,
+      content: "Refinery drill",
+      tags: [],
+    });
   });
 
   it("lists notes", async () => {
@@ -40,6 +44,8 @@ describe("Refinery controlled failure drill", () => {
     const response = await request(app).get("/notes");
 
     assert.equal(response.status, 200);
-    assert.deepEqual(response.body, [{ id: 1, content: "Listed note" }]);
+    assert.deepEqual(response.body, [
+      { id: 1, content: "Listed note", tags: [] },
+    ]);
   });
 });

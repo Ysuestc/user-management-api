@@ -2,8 +2,18 @@ import express from "express";
 import { z } from "zod";
 import { validate } from "./validate.js";
 
+const MAX_TAGS = 10;
+const MAX_TAG_LENGTH = 50;
+
+const tagsSchema = z
+  .array(z.string().trim().max(MAX_TAG_LENGTH))
+  .max(MAX_TAGS)
+  .transform((tags) => [...new Set(tags.filter(Boolean))])
+  .default([]);
+
 const createNoteSchema = z.object({
   content: z.string().trim().min(1),
+  tags: tagsSchema,
 });
 
 export function createNotesRouter() {
@@ -18,6 +28,7 @@ export function createNotesRouter() {
       const note = {
         id: nextId,
         content: request.validated.body.content,
+        tags: request.validated.body.tags,
       };
 
       nextId += 1;
